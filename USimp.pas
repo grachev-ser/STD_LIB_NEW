@@ -234,8 +234,10 @@ begin
 
       VN:=0;
       VN1:=1e10;
+
       i:=0;
       while i < N do begin
+        //X[i] :=  0.5 * (MaxParam[i] + MinParam[i]);
         DXMMi:=MaxParam[i]-MinParam[i];
         VN:=VN+DXMMi;
         if  VN1< DXMMi then VN1:= DXMMi;
@@ -246,7 +248,7 @@ begin
       if VN>VN1 then  STEP:=VN1;
 
       stepout:=0;
-{ NEW !!!!!__________________}
+
       RestrictParams(X^);
 
       //Состояние 1

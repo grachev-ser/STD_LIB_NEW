@@ -578,7 +578,8 @@ begin
   //Выводим информацию о подобранных параметрах оптимизации и текущих значениях критериев оптимизации
   ErrorEvent(txtOptParametersValue  + GetStrValue(Y[0], dtDoubleArray) +
              txtOptCriteria         + GetStrValue(U[0], dtDoubleArray) +
-             'Состояние: '          + IntToStr(stepout), msInfo, VisualObject);
+             ' Состояние: '          + IntToStr(stepout) +
+             ' Итерация: '           + IntToStr(NFE), msInfo, VisualObject);
 end;
 //-------------------------------------------------------------------------------------------------
 PROCEDURE TOptimize_new.DOCOMPQUAL;

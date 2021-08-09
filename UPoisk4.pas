@@ -61,7 +61,7 @@ protected
 
   // TODO-GS: Комментарии
   S,S1             : array of array of realtype;
-  A,B,C,D,E,GAMA,G,
+  A,B,C,D,GAMA,G,
   FN,G1,ALFA,
   ALAM       : realtype;
   i                : integer;
@@ -111,7 +111,6 @@ begin
   Stream.Read(B,SizeOfDouble);
   Stream.Read(C,SizeOfDouble);
   Stream.Read(D,SizeOfDouble);
-  Stream.Read(E,SizeOfDouble);
   Stream.Read(GAMA,SizeOfDouble);
   Stream.Read(G,SizeOfDouble);
   Stream.Read(FN,SizeOfDouble);
@@ -136,7 +135,6 @@ begin
   Stream.Write(B,SizeOfDouble);
   Stream.Write(C,SizeOfDouble);
   Stream.Write(D,SizeOfDouble);
-  Stream.Write(E,SizeOfDouble);
   Stream.Write(GAMA,SizeOfDouble);
   Stream.Write(G,SizeOfDouble);
   Stream.Write(FN,SizeOfDouble);
@@ -207,9 +205,7 @@ begin
   end;
 
   ErrorCode := 0;
-  // GS: Начальное приближение устанавливается в центр зоны поиска
   X[0] :=  0.5 * (MaxParam[0] + MinParam[0]);
-  // GS: Начальный шаг устанавливаем равным половине зоны поиска
   DX[0] :=  0.5 * (MaxParam[0] - MinParam[0]);
 
   //Состояние 1
@@ -299,7 +295,7 @@ end;
 //-------------------------------------------------------------------------------------------------
 PROCEDURE TPOISK4.StepFewParam;
   // Метки состояния
-  Label lbl_1, lbl_4, lbl_5, lbl_6;
+  Label lbl_1, lbl_2, lbl_3, lbl_4;
 
   // Промежуточные Метки состояния
   Label 40, 55, 70, 90, 100;
@@ -307,18 +303,31 @@ PROCEDURE TPOISK4.StepFewParam;
   // Метка выхода из процедуры
   label lbl_exit;
 
-   var j,k: integer;
+
+  var
+  // Обобщенная точность подбора параметров
+  EpsSum        : realtype;
+
+  // Счетчики
+  j,k           : integer;
 
 begin
   // Выбор состояния
   case otp_step_position of
     1: goto lbl_1;
+    2: goto lbl_2;
+    3: goto lbl_3;
     4: goto lbl_4;
-    5: goto lbl_5;
-    6: goto lbl_6;
   end;
 
   ErrorCode := 0;
+
+  i := 0;
+  while i < N do begin
+    X[i] :=  0.5 * (MaxParam[i] + MinParam[i]);
+    DX[i] :=  0.5 * (MaxParam[i] - MinParam[i]);
+    inc(i);
+  end;
 
   //Состояние 1
   SETOUTS(X, FX, ErrorCode);
@@ -341,36 +350,39 @@ begin
 
   40:
     i:=0;
-     while I < N DO BEGIN
-      E:=0.0;
+    while I < N DO BEGIN
       A:=0.0;
       B:=1.0;
-
+      EpsSum := 0.0;
       for j:=0 to N-1 do begin
-        X2[j]:=X^[j]+ALFA*S[j][i];
-        E:=E+abs(X2[j]-X^[j])/(abs(DXfinal[j])+1.0e-30);
+        X2[j] := X^[j] + ALFA * S[j][i];
+        EpsSum := EpsSum + abs(X2[j] - X^[j]) / (abs(DXfinal[j]) + 1.0e-30);
       end;
-      if  (E<=1) then begin
+      // Завершение по нормированной точности
+      if(EpsSum <= 1) then begin
         ErrorCode := er_opt_Eps;
         goto lbl_exit
       end;
-      if  (IterationNum>=NFEMAX) then begin
+      // Завершение по количеству итераций
+      if(IterationNum >= NFEMAX) then begin
         ErrorCode := er_opt_MaxFunEval;
         goto lbl_exit
       end;
-      if  (FX[M]<=0)then begin
-        StopOpt:=1;
+      // Завершение по
+      if(FX[M] <= 0) then begin
+        StopOpt := 1;
         goto lbl_exit
       end;
       //Состояние 4
       SETOUTS(@X2[0], @FX2[0], ErrorCode);
-      otp_step_position:=4;
+      otp_step_position := 2;
       exit;
 //##############################################################################
-  lbl_4:
+  lbl_2:
       GETQUAL(@X2[0], @FX2[0], ErrorCode);
-
       Inc(IterationNum);
+      OUT2(@X2, @FX2, N, M, IterationNum, otp_step_position);
+
       if (FX[M] <= FX2[M]) then goto 55;
       for j:=0 to N-1 do begin
         G:=X^[j];
@@ -385,17 +397,19 @@ begin
       B:=G;
       if StopOpt = 1 then goto lbl_exit;
   55:
-      for j:=0 to N-1 do X3[j]:=X^[j]+(X^[j]-X2[j]);
-      C:=A+(A-B);
+      for j := 0 to N - 1 do X3[j] := X^[j] + (X^[j] - X2[j]);
+      C := A + (A - B);
 
       //Состояние 5
       SETOUTS(@X3[0], @FX3[0], ErrorCode);
-      otp_step_position:=5;
+      otp_step_position := 3;
       exit;
 //##############################################################################
-  lbl_5:
+  lbl_3:
       GETQUAL(@X3[0], @FX3[0], ErrorCode);
       Inc(IterationNum);
+      OUT2(@X3, @FX3, N, M, IterationNum, otp_step_position);
+
       if  ((FX[M] <= FX3[M]) or (FX[M] <= 0) or (IterationNum>=NFEMAX)) then goto 70;
       for j:=0 to N-1 do X^[j]:=X3[j];
       FX[M] := FX3[M];
@@ -405,19 +419,21 @@ begin
   70:
       // TODO-GS:
       D:=(FX2[M] - FX[M]) + (FX3[M] - FX[M]);
-      if (D<=0) then goto 90;
+      if (D <= 0) then goto 90;
       // TODO-GS:
       GAMA:=(FX2[M] - FX3[M]) / (2.0 * D);
       for j:=0 to N-1 do X2[j]:=X^[j]+GAMA*(X^[j]-X2[j]);
 
       //Состояние 6
       SETOUTS(@X2[0], @FX2[0], ErrorCode);
-      otp_step_position:=6;
+      otp_step_position:=4;
       exit;
 //##############################################################################
-  lbl_6:
+  lbl_4:
       GETQUAL(@X2[0], @FX2[0], ErrorCode);
       Inc(IterationNum);
+      OUT2(@X2, @FX2, N, M, IterationNum, otp_step_position);
+
       B:=A+GAMA*(A-B);
       ALAM:=ALFA*abs(A-C)/sqrt(D);
       if (ALAM<0.25) then ALAM:=0.25;
@@ -432,12 +448,11 @@ begin
   90:
       if (abs(A)>(1.0*abs(ALAM))) then ALFA:=2.0*ALFA;
       if (abs(A)<(0.25*abs(ALAM))) then ALFA:=0.5*ALFA;
-      OUT2(X, FX, N, M, IterationNum, otp_step_position);
       if StopOpt = 1 then goto lbl_exit;
 
       inc(i);
-     END;
-
+    END;
+//##############################################################################
      FN:=N;
      G:=1.0/sqrt(FN);
 
@@ -469,7 +484,7 @@ begin
 
   lbl_exit:
     OUT2(X, FX, N, M, IterationNum, otp_step_position);
-    otp_step_position:=0;
+    otp_step_position := 0;
 end;
 //-------------------------------------------------------------------------------------------------
 END.
