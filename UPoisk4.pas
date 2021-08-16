@@ -187,14 +187,19 @@ begin
 end;
 //-------------------------------------------------------------------------------------------------
 PROCEDURE TPOISK4.StepOneParam;
+
   // Метки состояния
   Label lbl_1, lbl_2, lbl_3;
 
-  // Промежуточные Метки состояния
-  Label 5, 10, 15, 20;
+  // Метки возврата к состоянию
+  Label lbl_1R, lbl_2R; //5, 10, 15;
 
   // Метка выхода из процедуры
   label lbl_exit;
+
+  var
+  // Промежуточная переменная (параметр оптимизации)
+  Dummy         : realtype;
 
 begin
     // Выбор состояния
@@ -205,23 +210,24 @@ begin
   end;
 
   ErrorCode := 0;
+  IterationNum := 0;
   X[0] :=  0.5 * (MaxParam[0] + MinParam[0]);
   DX[0] :=  0.5 * (MaxParam[0] - MinParam[0]);
 
   //Состояние 1
   SETOUTS(X, FX, ErrorCode);
-  otp_step_position:=1;
+  otp_step_position := 1;
   exit;
 //##############################################################################
   lbl_1:
     // Определяем F(X1)
     GETQUAL(X, FX, ErrorCode);
-    IterationNum := 1;
+    Inc(IterationNum);
     OUT2(X, FX, N, M, IterationNum, otp_step_position);
-    if StopOpt = 1 then goto lbl_exit;
-    // Шаг 2: X2 = X1 + dX
+    // if StopOpt = 1 then goto lbl_exit;
+    // Расчет точки X2
     X2[0] := X^[0] + DX[0];
-  5:
+  lbl_1R:
     //Состояние 2
     SETOUTS(@X2[0], @FX2[0], ErrorCode);
     otp_step_position := 2;
@@ -232,19 +238,19 @@ begin
     GETQUAL(@X2[0], @FX2[0], ErrorCode);
     Inc(IterationNum);
     OUT2(X, FX, N, M, IterationNum, otp_step_position);
-    if StopOpt = 1 then goto lbl_exit;
+    // if StopOpt = 1 then goto lbl_exit;
+    // Функция уменьшается
+    if(FX[M] > FX2[M]) then begin
+      Dummy:=X^[0];
+      X^[0]:=X2[0];
+      X2[0]:=Dummy;
+      Dummy:=FX[M];
+      FX[M] := FX2[M];
+      FX2[M] := Dummy;
+    end;
 
-    if(FX[M] <= FX2[M]) then goto 10;
-
-    G:=X^[0];
-    X^[0]:=X2[0];
-    X2[0]:=G;
-    G:=FX[M];
-    FX[M] := FX2[M];
-    FX2[M] := G;
-
-  10:
-    // Шаг 3:
+  lbl_2R:
+    // Расчет точки X3
     X3[0] := X^[0] + (X^[0] - X2[0]);
     //Состояние 3
     SETOUTS(@X3[0], @FX3[0], ErrorCode);
@@ -256,37 +262,41 @@ begin
     GETQUAL(@X3[0], @FX3[0], ErrorCode);
     Inc(IterationNum);
     OUT2(X, FX, N, M, IterationNum, otp_step_position);
-    if StopOpt = 1 then goto lbl_exit;
-
-    if ((FX[M] <= FX3[M]) or (FX[M]<=0)) then goto 15;
-    X^[0] := X3[0];
-    FX[M] := FX3[M];
-    goto 10;
-  15:
+    // if StopOpt = 1 then goto lbl_exit;
+    // Найден оптимум !!!
+    if (FX3[M] <= 0) then begin
+      X^[0] := X3[0];
+      FX[M] := FX3[M];
+      StopOpt := 1;
+      goto lbl_exit
+    end;
+    // Превышено количество итераций
+    if (IterationNum > NFEMAX) then begin
+      ErrorCode := er_opt_MaxFunEval;
+      goto lbl_exit
+    end;
+    // Слишком маленький шаг - считаем новый градиент
+    if (abs(X3[0] - X^[0]) <= abs(DXfinal[0])) then begin
+      goto lbl_1;
+    end;
+    // Функция уменьшается - движемся дальше
+    if(FX[M] > FX3[M]) then begin
+      X^[0] := X3[0];
+      FX[M] := FX3[M];
+      goto lbl_2R;
+    end;
     // TODO-GS:
     D:=(FX2[M] - FX[M]) + (FX3[M] - FX[M]);
     if (D<=0) then  goto lbl_exit;{?????????}
     // TODO-GS:
     GAMA:=(FX2[M] - FX3[M]) / (2.0 * D);
-    if (abs(GAMA) > 0.02)  then goto 20;
-    if (GAMA >= 0) then  GAMA := 0.02;
-    if (GAMA <= 0) then  GAMA :=- 0.02;
-  20:
-    // Шаг N: Расчет точки X2
+    if (abs(GAMA) < 0.02)  then begin;
+      if (GAMA >= 0) then  GAMA := 0.02;
+      if (GAMA <= 0) then  GAMA :=- 0.02;
+    end;
+    // Расчет точки X2
     X2[0] := X^[0] + GAMA*(X^[0] - X2[0]);
-    if (abs(X3[0] - X^[0]) <= abs(DXfinal[0])) then begin
-      ErrorCode := er_opt_Eps;
-      goto lbl_exit
-    end;
-    if (IterationNum >= NFEMAX) then begin
-      ErrorCode := er_opt_MaxFunEval;
-      goto lbl_exit
-    end;
-    if (FX[M] <= 0) then begin
-      StopOpt := 1;
-      goto lbl_exit
-    end;
-    goto 5;
+    goto lbl_1R;
 
   lbl_exit:
     OUT2(X, FX, N, M, IterationNum, otp_step_position);
