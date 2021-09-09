@@ -191,10 +191,10 @@ end;
 PROCEDURE TGRADIENTS.StepOneParam;
 
   // Метки состояния
-  Label lbl_1, lbl_2, lbl_3;
+  Label lbl_1, lbl_2, lbl_3, lbl_4;
 
   // Метки возврата к состоянию
-  Label lbl_1R, lbl_2R;
+  Label lbl_1R, lbl_2R, lbl_3R;
 
   // Метка выхода из процедуры
   label lbl_exit;
@@ -209,6 +209,7 @@ begin
     1: goto lbl_1;
     2: goto lbl_2;
     3: goto lbl_3;
+    4: goto lbl_4;
   end;
 
   ErrorCode := 0;
@@ -217,7 +218,7 @@ begin
   DX[0] :=  0.1 * (MaxParam[0] - MinParam[0]);
   GAMA := 0.5;
 
-  // Состояние 1
+  //Состояние 1
   SETOUTS(X, FX, ErrorCode);
   otp_step_position := 1;
   exit;
@@ -227,11 +228,10 @@ begin
     GETQUAL(X, FX, ErrorCode);
     Inc(IterationNum);
     OUT2(X, FX, N, M, IterationNum, otp_step_position);
-    //if StopOpt = 1 then goto lbl_exit;
     // Расчет точки X2
     X2[0] := X^[0] + DX[0];
   lbl_1R:
-    // Состояние 2
+    //Состояние 2
     SETOUTS(@X2[0], @FX2[0], ErrorCode);
     otp_step_position := 2;
     exit;
@@ -241,23 +241,20 @@ begin
     GETQUAL(@X2[0], @FX2[0], ErrorCode);
     Inc(IterationNum);
     OUT2(X, FX, N, M, IterationNum, otp_step_position);
-    //if StopOpt = 1 then goto lbl_exit;
-
     // Функция уменьшается
     if(FX[M] > FX2[M]) then begin
-      Dummy := X^[0];
-      X^[0]:= X2[0];
-      X2[0] := Dummy;
-      Dummy := FX[M];
+      Dummy:=X^[0];
+      X^[0]:=X2[0];
+      X2[0]:=Dummy;
+      Dummy:=FX[M];
       FX[M] := FX2[M];
       FX2[M] := Dummy;
     end;
-    Gradient := (FX2[M] - FX[M]) / (X2[0] - X[0]);
 
   lbl_2R:
     // Расчет точки X3
-    X3[0] := X^[0] + GAMA * Gradient;
-    // Состояние 3
+    X3[0] := X^[0] + (X^[0] - X2[0]);
+    //Состояние 3
     SETOUTS(@X3[0], @FX3[0], ErrorCode);
     otp_step_position := 3;
     exit;
@@ -267,35 +264,65 @@ begin
     GETQUAL(@X3[0], @FX3[0], ErrorCode);
     Inc(IterationNum);
     OUT2(X, FX, N, M, IterationNum, otp_step_position);
-    //if StopOpt = 1 then goto lbl_exit;
     // Найден оптимум !!!
     if (FX3[M] <= 0) then begin
       X^[0] := X3[0];
       FX[M] := FX3[M];
-      StopOpt := 1;
       goto lbl_exit
     end;
-    // Превышено количество итераций
+    // Функция уменьшается - движемся дальше
+    if(FX[M] > FX3[M]) then begin
+      X^[0] := X3[0];
+      FX[M] := FX3[M];
+      goto lbl_2R;
+    end;
+    // Градиент
+    Gradient := (FX3[M] - FX[M]) / (X3[0] - X[0]);
+  lbl_3R:
+    // Расчет точки X3
+    X3[0] := X^[0] - GAMA * Gradient;
+    // Состояние 3
+    SETOUTS(@X3[0], @FX3[0], ErrorCode);
+    otp_step_position := 4;
+    exit;
+  //##############################################################################
+  lbl_4:
+    // Определяем F(X3)
+    GETQUAL(@X3[0], @FX3[0], ErrorCode);
+    Inc(IterationNum);
+    OUT2(@X3, @FX3, N, M, IterationNum, otp_step_position);
+    // Найден оптимум !!!
+    if (FX3[M] <= 0) then begin
+      X^[0] := X3[0];
+      FX[M] := FX3[M];
+      goto lbl_exit
+    end;
+        // Превышено количество итераций
     if (IterationNum > NFEMAX) then begin
       ErrorCode := er_opt_MaxFunEval;
       goto lbl_exit
     end;
     // Слишком маленький шаг - считаем новый градиент
     if (abs(X3[0] - X^[0]) <= abs(DXfinal[0])) then begin
-      goto lbl_1;
+      GAMA := 0.5;
+      X^[0] := X3[0] - 0.5 * DX[0];
+      SETOUTS(X, FX, ErrorCode);
+      otp_step_position := 1;
+      exit;
     end;
-    // Функция уменьшается - движемся дальше
+    // Функция уменьшается - считаем новый градиент
     if (FX[M] > FX3[M]) then begin
-      X^[0] := X3[0];
-      FX[M] := FX3[M];
-      goto lbl_2R;
+      X^[0] := X3[0] - 0.5 * DX[0];
+      SETOUTS(X, FX, ErrorCode);
+      otp_step_position := 1;
+      exit;
     end;
     // Корректируем коэффициент
     GAMA := 0.5 * GAMA;
-    goto lbl_2R;
+    goto lbl_3R;
 
   lbl_exit:
-    OUT2(X, FX, N, M, IterationNum, otp_step_position);
+    StopOpt := 1;
     otp_step_position := 0;
 end;
 //-------------------------------------------------------------------------------------------------
