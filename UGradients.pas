@@ -215,7 +215,7 @@ begin
   ErrorCode := 0;
   IterationNum := 1;
   X[0] :=  0.5 * (MaxParam[0] + MinParam[0]);
-  DX[0] :=  0.1 * (MaxParam[0] - MinParam[0]);
+  DX[0] :=  0.15 * (MaxParam[0] - MinParam[0]);
   GAMA := 0.5;
 
   //Состояние 1
@@ -268,6 +268,7 @@ begin
     if (FX3[M] <= 0) then begin
       X^[0] := X3[0];
       FX[M] := FX3[M];
+      StopOpt := 1;
       goto lbl_exit
     end;
     // Функция уменьшается - движемся дальше
@@ -295,6 +296,7 @@ begin
     if (FX3[M] <= 0) then begin
       X^[0] := X3[0];
       FX[M] := FX3[M];
+      StopOpt := 1;
       goto lbl_exit
     end;
         // Превышено количество итераций
@@ -305,14 +307,16 @@ begin
     // Слишком маленький шаг - считаем новый градиент
     if (abs(X3[0] - X^[0]) <= abs(DXfinal[0])) then begin
       GAMA := 0.5;
-      X^[0] := X3[0] - 0.5 * DX[0];
+      X^[0] := X3[0];
+      FX[M] := FX3[M];
       SETOUTS(X, FX, ErrorCode);
       otp_step_position := 1;
       exit;
     end;
     // Функция уменьшается - считаем новый градиент
     if (FX[M] > FX3[M]) then begin
-      X^[0] := X3[0] - 0.5 * DX[0];
+      X^[0] := X3[0];
+      FX[M] := FX3[M];
       SETOUTS(X, FX, ErrorCode);
       otp_step_position := 1;
       exit;
@@ -322,7 +326,6 @@ begin
     goto lbl_3R;
 
   lbl_exit:
-    StopOpt := 1;
     otp_step_position := 0;
 end;
 //-------------------------------------------------------------------------------------------------

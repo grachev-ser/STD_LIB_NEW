@@ -224,7 +224,6 @@ begin
     GETQUAL(X, FX, ErrorCode);
     Inc(IterationNum);
     OUT2(X, FX, N, M, IterationNum, otp_step_position);
-    // if StopOpt = 1 then goto lbl_exit;
     // Расчет точки X2
     X2[0] := X^[0] + DX[0];
   lbl_1R:
@@ -238,7 +237,6 @@ begin
     GETQUAL(@X2[0], @FX2[0], ErrorCode);
     Inc(IterationNum);
     OUT2(X, FX, N, M, IterationNum, otp_step_position);
-    // if StopOpt = 1 then goto lbl_exit;
     // Функция уменьшается
     if(FX[M] > FX2[M]) then begin
       Dummy:=X^[0];
@@ -262,7 +260,6 @@ begin
     GETQUAL(@X3[0], @FX3[0], ErrorCode);
     Inc(IterationNum);
     OUT2(X, FX, N, M, IterationNum, otp_step_position);
-    // if StopOpt = 1 then goto lbl_exit;
     // Найден оптимум !!!
     if (FX3[M] <= 0) then begin
       X^[0] := X3[0];
@@ -299,8 +296,7 @@ begin
     goto lbl_1R;
 
   lbl_exit:
-    OUT2(X, FX, N, M, IterationNum, otp_step_position);
-    otp_step_position:=0;
+    otp_step_position := 0;
 end;
 //-------------------------------------------------------------------------------------------------
 PROCEDURE TPOISK4.StepFewParam;
