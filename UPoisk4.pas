@@ -192,7 +192,7 @@ PROCEDURE TPOISK4.StepOneParam;
   Label lbl_1, lbl_2, lbl_3;
 
   // Метки возврата к состоянию
-  Label lbl_1R, lbl_2R; //5, 10, 15;
+  Label lbl_1R, lbl_2R;
 
   // Метка выхода из процедуры
   label lbl_exit;
@@ -211,10 +211,10 @@ begin
 
   ErrorCode := 0;
   IterationNum := 0;
-  X[0] :=  0.5 * (MaxParam[0] + MinParam[0]);
-  DX[0] :=  0.5 * (MaxParam[0] - MinParam[0]);
+  X^[0] :=  0.5 * (MaxParam^[0] + MinParam^[0]);
+  DX^[0] :=  0.5 * (MaxParam^[0] - MinParam^[0]);
 
-  //Состояние 1
+  // Состояние 1
   SETOUTS(X, FX, ErrorCode);
   otp_step_position := 1;
   exit;
@@ -225,9 +225,9 @@ begin
     Inc(IterationNum);
     OUT2(X, FX, N, M, IterationNum, otp_step_position);
     // Расчет точки X2
-    X2[0] := X^[0] + DX[0];
+    X2[0] := X^[0] + DX^[0];
   lbl_1R:
-    //Состояние 2
+    // Состояние 2
     SETOUTS(@X2[0], @FX2[0], ErrorCode);
     otp_step_position := 2;
     exit;
@@ -236,21 +236,28 @@ begin
     // Определяем F(X2)
     GETQUAL(@X2[0], @FX2[0], ErrorCode);
     Inc(IterationNum);
-    OUT2(X, FX, N, M, IterationNum, otp_step_position);
+    OUT2(@X2[0], @FX2[0], N, M, IterationNum, otp_step_position);
+    // Найден оптимум !!!
+    if (FX2[M] <= 0.001) then begin
+      X^[0] := X2[0];
+      FX^[M] := FX2[M];
+      StopOpt := 1;
+      goto lbl_exit
+    end;
     // Функция уменьшается
-    if(FX[M] > FX2[M]) then begin
-      Dummy:=X^[0];
-      X^[0]:=X2[0];
-      X2[0]:=Dummy;
-      Dummy:=FX[M];
-      FX[M] := FX2[M];
+    if(FX^[M] > FX2[M]) then begin
+      Dummy := X^[0];
+      X^[0] := X2[0];
+      X2[0] := Dummy;
+      Dummy := FX^[M];
+      FX^[M] := FX2[M];
       FX2[M] := Dummy;
     end;
 
   lbl_2R:
     // Расчет точки X3
     X3[0] := X^[0] + (X^[0] - X2[0]);
-    //Состояние 3
+    // Состояние 3
     SETOUTS(@X3[0], @FX3[0], ErrorCode);
     otp_step_position := 3;
     exit;
@@ -259,11 +266,11 @@ begin
     // Определяем F(X3)
     GETQUAL(@X3[0], @FX3[0], ErrorCode);
     Inc(IterationNum);
-    OUT2(X, FX, N, M, IterationNum, otp_step_position);
+    OUT2(@X3[0], @FX3[0], N, M, IterationNum, otp_step_position);
     // Найден оптимум !!!
-    if (FX3[M] <= 0) then begin
+    if (FX3[M] <= 0.001) then begin
       X^[0] := X3[0];
-      FX[M] := FX3[M];
+      FX^[M] := FX3[M];
       StopOpt := 1;
       goto lbl_exit
     end;
@@ -277,16 +284,16 @@ begin
       goto lbl_1;
     end;
     // Функция уменьшается - движемся дальше
-    if(FX[M] > FX3[M]) then begin
+    if(FX^[M] > FX3[M]) then begin
       X^[0] := X3[0];
-      FX[M] := FX3[M];
+      FX^[M] := FX3[M];
       goto lbl_2R;
     end;
     // TODO-GS:
-    D:=(FX2[M] - FX[M]) + (FX3[M] - FX[M]);
+    D:=(FX2[M] - FX^[M]) + (FX3[M] - FX^[M]);
     if (D<=0) then  goto lbl_exit;{?????????}
     // TODO-GS:
-    GAMA:=(FX2[M] - FX3[M]) / (2.0 * D);
+    GAMA := (FX2[M] - FX3[M]) / (2.0 * D);
     if (abs(GAMA) < 0.02)  then begin;
       if (GAMA >= 0) then  GAMA := 0.02;
       if (GAMA <= 0) then  GAMA :=- 0.02;
@@ -330,8 +337,8 @@ begin
 
   i := 0;
   while i < N do begin
-    X[i] :=  0.5 * (MaxParam[i] + MinParam[i]);
-    DX[i] :=  0.5 * (MaxParam[i] - MinParam[i]);
+    X^[i] :=  0.5 * (MaxParam^[i] + MinParam^[i]);
+    DX^[i] :=  0.5 * (MaxParam^[i] - MinParam^[i]);
     inc(i);
   end;
 
@@ -375,7 +382,7 @@ begin
         goto lbl_exit
       end;
       // Завершение по
-      if(FX[M] <= 0) then begin
+      if(FX^[M] <= 0.001) then begin
         StopOpt := 1;
         goto lbl_exit
       end;
@@ -387,16 +394,16 @@ begin
   lbl_2:
       GETQUAL(@X2[0], @FX2[0], ErrorCode);
       Inc(IterationNum);
-      OUT2(@X2, @FX2, N, M, IterationNum, otp_step_position);
+      OUT2(@X2[0], @FX2[0], N, M, IterationNum, otp_step_position);
 
-      if (FX[M] <= FX2[M]) then goto 55;
+      if (FX^[M] <= FX2[M]) then goto 55;
       for j:=0 to N-1 do begin
         G:=X^[j];
         X^[j]:=X2[j];
         X2[j]:=G;
       end;
-      G:=FX[M];
-      FX[M]:=FX2[M];
+      G:=FX^[M];
+      FX^[M]:=FX2[M];
       FX2[M]:=G;
       G:=A;
       A:=B;
@@ -414,17 +421,17 @@ begin
   lbl_3:
       GETQUAL(@X3[0], @FX3[0], ErrorCode);
       Inc(IterationNum);
-      OUT2(@X3, @FX3, N, M, IterationNum, otp_step_position);
+      OUT2(@X3[0], @FX3[0], N, M, IterationNum, otp_step_position);
 
-      if  ((FX[M] <= FX3[M]) or (FX[M] <= 0) or (IterationNum>=NFEMAX)) then goto 70;
+      if  ((FX^[M] <= FX3[M]) or (FX^[M] <= 0) or (IterationNum>=NFEMAX)) then goto 70;
       for j:=0 to N-1 do X^[j]:=X3[j];
-      FX[M] := FX3[M];
+      FX^[M] := FX3[M];
       A:=C;
       if StopOpt = 1 then goto lbl_exit;
       goto 55;
   70:
       // TODO-GS:
-      D:=(FX2[M] - FX[M]) + (FX3[M] - FX[M]);
+      D:=(FX2[M] - FX^[M]) + (FX3[M] - FX^[M]);
       if (D <= 0) then goto 90;
       // TODO-GS:
       GAMA:=(FX2[M] - FX3[M]) / (2.0 * D);
@@ -438,7 +445,7 @@ begin
   lbl_4:
       GETQUAL(@X2[0], @FX2[0], ErrorCode);
       Inc(IterationNum);
-      OUT2(@X2, @FX2, N, M, IterationNum, otp_step_position);
+      OUT2(@X2[0], @FX2[0], N, M, IterationNum, otp_step_position);
 
       B:=A+GAMA*(A-B);
       ALAM:=ALFA*abs(A-C)/sqrt(D);
@@ -446,9 +453,9 @@ begin
       if (ALAM>4) then ALAM:=4;
       if (B<0) then ALAM:=-ALAM;
       for j:=0 to N-1 do S[j][i]:=ALAM*S[j][i];
-      if (FX[M] <= FX2[M]) then goto 90;
+      if (FX^[M] <= FX2[M]) then goto 90;
       for j:=0 to N-1 do X^[j]:=X2[j];
-      FX[M] := FX2[M];
+      FX^[M] := FX2[M];
       A:=B;
       if StopOpt = 1 then goto lbl_exit;
   90:
@@ -489,7 +496,6 @@ begin
      goto 40;
 
   lbl_exit:
-    OUT2(X, FX, N, M, IterationNum, otp_step_position);
     otp_step_position := 0;
 end;
 //-------------------------------------------------------------------------------------------------

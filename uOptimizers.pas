@@ -155,7 +155,7 @@ end;
 //##############################################################################
 implementation
 //##############################################################################
-uses UPoisk2, UPoisk4, USimp, UGradients;
+uses UPoisk2, UPoisk4, USimp, UGradients, UGradients2;
 //-------------------------------------------------------------------------------------------------
 constructor TOptimize_new.Create;
 begin
@@ -319,8 +319,10 @@ begin
                         1: OptimizeMethod:=TPOISK4.Create;
                         // Симплекс
                         2: OptimizeMethod:=TSIMPS.Create;
-                        // Метод сопряженных градиентов
+                        // Метод наискорейшего спуска
                         3: OptimizeMethod:=TGradients.Create;
+                        // Метод сопряженных градиентов
+                        4: OptimizeMethod:=TGradients2.Create;
                       end;
                       OptimizeMethod.SETOUTS:=DOSETOUTS;
                       OptimizeMethod.GETQUAL:=DOGETQUAL;
@@ -377,8 +379,8 @@ begin
                      // ----
   //##############################################################################
     do_opt_step:
-                      // При работе нескольких блоков оптимимизация иногда не завершается
-                      if (StopOpt = 1) then exit;
+                      // Принудительное завершение оптимизации
+                      if (optmode = 0) and (StopOpt = 1) then exit;
 
                       //Вызов собственно оптимизации
                       OptimizeMethod.ExecuteStep(
@@ -581,8 +583,9 @@ begin
   //Выводим информацию о подобранных параметрах оптимизации и текущих значениях критериев оптимизации
   ErrorEvent(txtOptParametersValue  + GetStrValue(Y[0], dtDoubleArray) +
              txtOptCriteria         + GetStrValue(U[0], dtDoubleArray) +
-             ' Состояние: '          + IntToStr(stepout) +
-             ' Итерация: '           + IntToStr(NFE), msInfo, VisualObject);
+             ' Качество: '          + FloatToStr(FX[M]) +
+             ' Состояние: '         + IntToStr(stepout) +
+             ' Итерация: '          + IntToStr(NFE), msInfo, VisualObject);
 end;
 //-------------------------------------------------------------------------------------------------
 PROCEDURE TOptimize_new.DOCOMPQUAL;

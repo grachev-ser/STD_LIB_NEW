@@ -36,6 +36,7 @@ uses
   trigger in 'trigger.pas',
   Vectors in 'Vectors.pas',
   uOptimizers in 'uOptimizers.pas',
+  UGradients2 in 'UGradients2.pas',
   UGradients in 'UGradients.pas';
 
 {$R *.res}

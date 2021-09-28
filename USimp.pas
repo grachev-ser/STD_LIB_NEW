@@ -10,45 +10,75 @@ interface
 USES Classes, DataTypes, OptType;
 
 type
+  // Процедура оптимизации реализующая метод деформируемого многогранника (Симплекс метод)
+  // переделанная под конечно-автоматный вариант работы
+  TSIMPS = class(TOptMethod)
 
-   TSIMPS = class(TOptMethod)
-   protected
-      SUM,
-      XREZ,
-      FXREZ : array of realtype;
-      A,
-      X1,
-      FX1   : array of array of realtype;
-      K1,K2,K3,K4,INN,I,
-      L,IVS,
-      INDEX,KOUNT,
-      NCIKL,
-      KODOUT,
-      NFE,stepout,iout    : Integer;
-      ALFA,BETA,GAMA,
-      XNX,
-      SUMH,SUM2,SUMS,
-      DIFER,FXMax,
-      DIFERold,DIFERnew,
-      SUML,STEP,EPS,
-      VN,VN1,DXMMi,
-      STEP1,STEP2         : RealType;
-   public
-     procedure InitMem(N,M: integer);override;
-     procedure ExecuteStep(X,FX:PExtArr;
-                 N:integer; M:integer;
-                 DX:  PExtArr;
-                 DXfinal:PExtArr;
-                 NFEMAX: integer;
-                 MinParam,MaxParam: PExtArr;
-                 var NER: NativeInt;
-                 var StopOpt: integer;
-                 var otp_step_position: integer
-                 );override;
-    function    RestartLoad(Stream: TStream;Count: integer;const TimeShift:double):boolean;override;
-    procedure   RestartSave(Stream: TStream);override;
-    procedure   LeaveMem;override;
-   end;
+public
+
+  // Выполнить шаг оптимизации
+  procedure ExecuteStep(X                     : PExtArr;    // Массив выходов (параметров)
+                        FX                    : PExtArr;    // Массив входов (критериев)
+                        N                     : integer;    // Кол-во выходов (параметров)
+                        M                     : integer;    // Кол-во входов (критериев)
+                        DX                    : PExtArr;    // Текущее приращение параметра оптимизации
+                        DXfinal               : PExtArr;    // Точность подбора выходов (параметров)
+                        NFEMAX                : integer;    // Максимальное кол-во итераций
+                        MinParam              : PExtArr;    // Минимальные значения выходов (параметров)
+                        MaxParam              : PExtArr;    // Максимальные значения выходов (параметров)
+                        var ErrorCode         : NativeInt;  // Код ошибки
+                        var StopOpt           : integer;    // Флаг конца оптимизации
+                        var otp_step_position : integer     // Состояние алгоритма оптимизации
+                        ); override;
+
+  // Инициализация памяти
+  procedure InitMem(N,M: integer);override;
+
+  // Освобождение памяти
+  procedure   LeaveMem;override;
+
+  // Чтение точки рестарта блока
+  function    RestartLoad(Stream: TStream;Count: integer;const TimeShift:double):boolean;override;
+
+  // Запись точки рестарта блока
+  procedure   RestartSave(Stream: TStream);override;
+
+protected
+
+  // Количество итераций
+  iIterationNum : integer;
+
+  // Коэффициент отражения
+  ALFA          : RealType;
+
+  // Коэффициент сжатия
+  BETA          : RealType;
+
+  // Коэффициент растяжения
+  GAMA          : RealType;
+
+  // Значение функции в лучшей точке
+  FXREZ         : array of realtype;
+
+  //
+  SUM           : array of realtype;
+
+  // Лучшая точка
+  XREZ          : array of realtype;
+
+  A,
+  X1,
+  FX1   : array of array of realtype;
+  K1,K2,K3,K4,INN,I,
+  INDEX,KOUNT,
+  iout    : Integer;
+  XNX,
+  SUMH,SUM2,SUMS,
+  DIFER,FXMax,
+  DIFERold,DIFERnew,
+  SUML,STEP,
+  STEP1,STEP2         : RealType;
+end;
 
 //##############################################################################
 implementation
@@ -72,14 +102,9 @@ begin
   Stream.Read(K4,SizeOfInt);
   Stream.Read(INN,SizeOfInt);
   Stream.Read(I,SizeOfInt);
-  Stream.Read(L,SizeOfInt);
-  Stream.Read(IVS,SizeOfInt);
   Stream.Read(INDEX,SizeOfInt);
   Stream.Read(KOUNT,SizeOfInt);
-  Stream.Read(NCIKL,SizeOfInt);
-  Stream.Read(KODOUT,SizeOfInt);
-  Stream.Read(NFE,SizeOfInt);
-  Stream.Read(stepout,SizeOfInt);
+  Stream.Read(iIterationNum, SizeOfInt);
   Stream.Read(iout,SizeOfInt);
   Stream.Read(ALFA,SizeOfDouble);
   Stream.Read(BETA,SizeOfDouble);
@@ -94,10 +119,6 @@ begin
   Stream.Read(DIFERnew,SizeOfDouble);
   Stream.Read(SUML,SizeOfDouble);
   Stream.Read(STEP,SizeOfDouble);
-  Stream.Read(EPS,SizeOfDouble);
-  Stream.Read(VN,SizeOfDouble);
-  Stream.Read(VN1,SizeOfDouble);
-  Stream.Read(DXMMi,SizeOfDouble);
   Stream.Read(STEP1,SizeOfDouble);
   Stream.Read(STEP2,SizeOfDouble);
 end;
@@ -120,14 +141,9 @@ begin
   Stream.Write(K4,SizeOfInt);
   Stream.Write(INN,SizeOfInt);
   Stream.Write(I,SizeOfInt);
-  Stream.Write(L,SizeOfInt);
-  Stream.Write(IVS,SizeOfInt);
   Stream.Write(INDEX,SizeOfInt);
   Stream.Write(KOUNT,SizeOfInt);
-  Stream.Write(NCIKL,SizeOfInt);
-  Stream.Write(KODOUT,SizeOfInt);
-  Stream.Write(NFE,SizeOfInt);
-  Stream.Write(stepout,SizeOfInt);
+  Stream.Write(iIterationNum, SizeOfInt);
   Stream.Write(iout,SizeOfInt);
   Stream.Write(ALFA,SizeOfDouble);
   Stream.Write(BETA,SizeOfDouble);
@@ -142,10 +158,6 @@ begin
   Stream.Write(DIFERnew,SizeOfDouble);
   Stream.Write(SUML,SizeOfDouble);
   Stream.Write(STEP,SizeOfDouble);
-  Stream.Write(EPS,SizeOfDouble);
-  Stream.Write(VN,SizeOfDouble);
-  Stream.Write(VN1,SizeOfDouble);
-  Stream.Write(DXMMi,SizeOfDouble);
   Stream.Write(STEP1,SizeOfDouble);
   Stream.Write(STEP2,SizeOfDouble);
 end;
@@ -183,7 +195,19 @@ PROCEDURE  TSIMPS.ExecuteStep;
   label 25,28,38,39,11,13,17,16,14,26,100,l_exit,
         lbl_1,lbl_2,lbl_3,lbl_4,lbl_5,lbl_6,lbl_7,lbl_8,lbl_9;
 
-  var J,K: integer;
+  var
+
+  // Диапазон поиска по выбранному параметру
+  rDiapason     : realtype;
+
+  // Диапазон поиска по выбранному параметру
+  rDiapasonMax  : realtype;
+
+  // Обобщенная точность подбора параметров
+  rEpsSum       : realtype;
+
+  // Счетчики
+  J,K           : integer;
 
   PROCEDURE RestrictParams(var X: array of RealType);
     var i    : integer;
@@ -216,9 +240,7 @@ begin
         9:  goto lbl_9;
       end;
 
-      NCIKL:=1;
-      NFE:=0;
-      EPS:=1e-6;
+      iIterationNum := 0;
       ALFA:=1.0;
       BETA:=0.5;
       GAMA:=2.0;
@@ -232,64 +254,58 @@ begin
       KOUNT:=0;
       SUML:=-999;
 
-      VN:=0;
-      VN1:=1e10;
+      STEP := 0;
+      rDiapasonMax := 1e10;
 
       i:=0;
       while i < N do begin
-        //X[i] :=  0.5 * (MaxParam[i] + MinParam[i]);
-        DXMMi:=MaxParam[i]-MinParam[i];
-        VN:=VN+DXMMi;
-        if  VN1< DXMMi then VN1:= DXMMi;
+        rDiapason := MaxParam[i] - MinParam[i];
+        STEP := STEP + rDiapason;
+        if  rDiapasonMax < rDiapason then rDiapasonMax := rDiapason;
         inc(i);
       end;
-      VN:=0.2*VN/N;
-      STEP:=VN;
-      if VN>VN1 then  STEP:=VN1;
-
-      stepout:=0;
+      STEP := 0.2 * STEP / N;
+      if STEP > rDiapasonMax then  STEP := rDiapasonMax;
 
       RestrictParams(X^);
 
       //Состояние 1
-      SETOUTS(X,FX,NER);
+      SETOUTS(X, FX, ErrorCode);
       otp_step_position:=1;
       exit;
 //##############################################################################
   lbl_1:
-       GETQUAL(X,FX,NER);    { if NER<>0 then exit;}
+      GETQUAL(X, FX, ErrorCode);    { if NER<>0 then exit;}
 
       if StopOpt = -1 then StopOpt:=0;
       SUM[INN-1]:=FX^[M];
       FXMax:=FX^[M];
       for j:=0 to M do FX1[INN-1][j]:=FX^[j];
-      Inc(NFE);
-{ NEW !!!!!__________________}
-    {  ’ Є в®«мЄ® ®¤Ё­ а § ЇаЁ NFE=1 }
+      Inc(iIterationNum);
+
       for j:=0 to N-1 do XREZ[j]:=X^[j];
       for j:=0 to M do FXREZ[j]:=FX^[j];
-      OUT2(@XREZ[0],@FXREZ[0],N,M,NFE,stepout);
+      OUT2(@XREZ[0], @FXREZ[0], N, M, iIterationNum, otp_step_position);
       if StopOpt = 1 then goto l_exit;
       iout:=0;
-      COMPPSIMP(FXREZ,N,M,NFE,NFEMAX,NER);if StopOpt = 1 then goto l_exit;
- (*  ў¬Ґбв® NCIKL ‚›‚Ћ„€’‘џ NFE !!! зЁб«® ўлзЁб«Ґ­Ё© дг­ЄжЁЁ  *)
+      COMPPSIMP(FXREZ, N, M, iIterationNum, NFEMAX, ErrorCode);
+      if StopOpt = 1 then goto l_exit;
+
       K1:=N+1;
       K2:=N+2;
       K3:=N+3;
       K4:=N+4;
 { NEW !!!!!__________________}
   { ‚Њ…‘’Ћ STARTSIMP(STEP,N,K1,X,X1) }
-      VN:=N;
-      STEP1:=STEP/(VN*sqrt(2.0))*(sqrt(VN+1.0)+VN-1.0);
-      STEP2:=STEP/(VN*sqrt(2.0))*(sqrt(VN+1.0)-1.0);
+      STEP1:=STEP / (N * sqrt(2.0)) * (sqrt(N + 1.0) + N - 1.0);
+      STEP2:=STEP / (N * sqrt(2.0)) * (sqrt(N + 1.0) - 1.0);
       for J:=0 to N-1 do
       A[0][J]:=0;
 
       i:=1;
       while I < K1 do begin
          for J:=0 to N-1 do A[I][J]:=STEP2;
-         L:=I-1;
-         A[I][L]:=STEP1;
+         A[I][I-1]:=STEP1;
          inc(i);
       end;
       i:=0;
@@ -308,14 +324,18 @@ begin
       INN:=I+1;
 
       //Состояние 2
-      SETOUTS(X,FX,NER);
-      otp_step_position:=2;exit;
-      lbl_2: GETQUAL(X,FX,NER);
+      SETOUTS(X, FX, ErrorCode);
+      otp_step_position:=2;
+      exit;
+     lbl_2:
+      GETQUAL(X, FX, ErrorCode);
 
       SUM[INN-1]:=FX^[M];
       for k:=0 to M do FX1[INN-1][k]:=FX^[k];
-      Inc(NFE);
-      COMPPSIMP(FX^,N,M,NFE,NFEMAX,NER);if StopOpt = 1 then goto 100;
+      Inc(iIterationNum);
+      OUT2(X, FX, N, M, iIterationNum, otp_step_position);
+      COMPPSIMP(FX^, N, M, iIterationNum, NFEMAX, ErrorCode);
+      if StopOpt = 1 then goto 100;
       inc(i);
      end;
      iout:=1;
@@ -339,17 +359,16 @@ begin
          KOUNT:=j;
       end;
 
-{ NEW !!!!!__________________}
-   (*   €‘ЏЋ‹њ‡Ћ‚ЂЌ€…  DXfinal  *)
-   (*  ЏђЋ‚…ђЉЂ ЌЂ ’Ћ—ЌЋ‘’њ ЋЏђ…„…‹…Ќ€џ ЏЂђЂЊ…’ђЋ‚ *)
-     VN:=0;
-     for J:=0 to N-1 do
-      VN:=VN+abs(X1[INDEX][J]-X1[KOUNT][J])/(abs(DXfinal[J])+1.0e-30);
-   (* Ґб«Ё ЇаЁа йҐ­Ёп ¬ «л, ®Є®­зЁвм Ї®ЁбЄ *)
-     if  (VN<=0.01)  then begin
-      NER:=er_opt_eps;
-      goto l_exit;
-     end;
+      // Расчет нормированной точности
+      rEpsSum := 0;
+      for J:=0 to N-1 do  begin
+        rEpsSum := rEpsSum + abs(X1[INDEX][J] - X1[KOUNT][J]) / (abs(DXfinal[J]) + 1.0e-30);
+      end;
+      // Завершение по нормированной точности
+      if(rEpsSum <= 0.01) then begin
+        ErrorCode := er_opt_eps;
+        goto l_exit;
+      end;
 
  (* ЌЂ•Ћ†„Ќ€… –…Ќ’ђЂ ’џ†…‘’€ TO—EK C €Ќ„…Љ‘ЂЊ€,Ћ’‹€—Ќ›Њ€ Ћ’ INDEX *)
       for J:=0 to N-1 do begin
@@ -368,9 +387,11 @@ begin
       INN:=K3;
 
       //Состояние 3
-      SETOUTS(X,FX,NER);
-      otp_step_position:=3;exit;
-      lbl_3: GETQUAL(X,FX,NER);    { if NER<>0 then exit;}
+      SETOUTS(X,FX,ErrorCode);
+      otp_step_position:=3;
+      exit;
+    lbl_3:
+      GETQUAL(X, FX, ErrorCode);    { if NER<>0 then exit;}
 
       SUM[INN-1]:=FX^[M];
 
@@ -380,8 +401,10 @@ begin
         inc(i);
       end;
 
-      Inc(NFE);
-      COMPPSIMP(FX^,N,M,NFE,NFEMAX,NER);if StopOpt = 1 then goto 100;
+      Inc(iIterationNum);
+      OUT2(X, FX, N, M, iIterationNum, otp_step_position);
+      COMPPSIMP(FX^, N, M, iIterationNum, NFEMAX, ErrorCode);
+      if StopOpt = 1 then goto 100;
 
       if (SUM[K3-1]<SUML) then goto 11;
  (* ‚›ЃЋђ ‚’ЋђЋѓЋ ЌЂ€ЃЋ‹њ…ѓЋ ‡ЌЂ—…Ќ€џ ‚ ‘€ЊЏ‹…Љ‘… *)
@@ -405,14 +428,18 @@ begin
       INN:=K4;
 
       //Состояние 4
-      SETOUTS(X,FX,NER);
-      otp_step_position:=4;exit;
-      lbl_4: GETQUAL(X,FX,NER);
+      SETOUTS(X, FX, ErrorCode);
+      otp_step_position:=4;
+      exit;
+    lbl_4:
+      GETQUAL(X, FX, ErrorCode);
 
       SUM[INN-1]:=FX^[M];
       for j:=0 to M do  FX1[INN-1][j]:=FX^[j];
-      Inc(NFE);
-      COMPPSIMP(FX^,N,M,NFE,NFEMAX,NER);if StopOpt = 1 then goto 100;
+      Inc(iIterationNum);
+      OUT2(X, FX, N, M, iIterationNum, otp_step_position);
+      COMPPSIMP(FX^, N, M, iIterationNum, NFEMAX, ErrorCode);
+      if StopOpt = 1 then goto 100;
 
       if (SUM[K4-1]<SUML) then goto 16;
       goto 14;
@@ -424,15 +451,19 @@ begin
       end;
       INN:=K4;
 
-      //Состояние 5
-      SETOUTS(X,FX,NER);
-      otp_step_position:=5;exit;
-      lbl_5: GETQUAL(X,FX,NER);
+      // Состояние 5
+      SETOUTS(X, FX, ErrorCode);
+      otp_step_position:=5;
+      exit;
+    lbl_5:
+      GETQUAL(X, FX, ErrorCode);
 
       SUM[INN-1]:=FX^[M];
       for j:=0 to M do FX1[INN-1][j]:=FX^[j];
-      Inc(NFE);
-      COMPPSIMP(FX^,N,M,NFE,NFEMAX,NER);if StopOpt = 1 then goto 100;
+      Inc(iIterationNum);
+      OUT2(X, FX, N, M, iIterationNum, otp_step_position);
+      COMPPSIMP(FX^, N, M, iIterationNum, NFEMAX, ErrorCode);
+      if StopOpt = 1 then goto 100;
 
       if (SUMH>SUM[K4-1]) then goto 16;
 (*  ‘†Ђ’€… ‘€ЊЏ‹…Љ‘Ђ ‚„‚Ћ… …‘‹€ Ћ’ђЂ†…Ќ€… Џђ€‚…‹Ћ Љ ’Ћ—Љ… ‘ ЃЋ‹њ€Њ
@@ -447,14 +478,18 @@ begin
          INN:=I+1;
 
          //Состояние 6
-         SETOUTS(X,FX,NER);
-         otp_step_position:=6;exit;
-         lbl_6: GETQUAL(X,FX,NER);
+         SETOUTS(X, FX, ErrorCode);
+         otp_step_position:=6;
+         exit;
+      lbl_6:
+         GETQUAL(X, FX, ErrorCode);
 
          SUM[INN-1]:=FX^[M];
          for k:=0 to M do FX1[INN-1][k]:=FX^[k];
-         Inc(NFE);
-         COMPPSIMP(FX^,N,M,NFE,NFEMAX,NER);if StopOpt = 1 then goto 100;
+         Inc(iIterationNum);
+         OUT2(X, FX, N, M, iIterationNum, otp_step_position);
+         COMPPSIMP(FX^, N, M, iIterationNum, NFEMAX, ErrorCode);
+         if StopOpt = 1 then goto 100;
          inc(i);
      end;
      iout:=1;
@@ -466,14 +501,18 @@ begin
      INN:=INDEX+1;
 
      //Состояние 7
-     SETOUTS(X,FX,NER);
-     otp_step_position:=7;exit;
-     lbl_7: GETQUAL(X,FX,NER);
+     SETOUTS(X, FX, ErrorCode);
+     otp_step_position:=7;
+     exit;
+    lbl_7:
+     GETQUAL(X, FX, ErrorCode);
 
      SUM[INN-1]:=FX^[M];
      for j:=0 to M do FX1[INN-1][j]:=FX^[j];
-     Inc(NFE);
-     COMPPSIMP(FX^,N,M,NFE,NFEMAX,NER);if StopOpt = 1 then goto 100;
+     Inc(iIterationNum);
+     OUT2(X, FX, N, M, iIterationNum, otp_step_position);
+     COMPPSIMP(FX^, N, M, iIterationNum, NFEMAX, ErrorCode);
+     if StopOpt = 1 then goto 100;
      goto 26;
   14: for J:=0 to N-1 do begin
        X1[INDEX][J]:=X1[K3-1][J];
@@ -482,26 +521,33 @@ begin
       INN:=INDEX+1;
 
       //Состояние 8
-      SETOUTS(X,FX,NER);
-      otp_step_position:=8;exit;
-      lbl_8: GETQUAL(X,FX,NER);
+      SETOUTS(X, FX, ErrorCode);
+      otp_step_position:=8;
+      exit;
+    lbl_8:
+      GETQUAL(X, FX, ErrorCode);
 
       SUM[INN-1]:=FX^[M];
       for j:=0 to M do FX1[INN-1][j]:=FX^[j];
-      Inc(NFE);
-      COMPPSIMP(FX^,N,M,NFE,NFEMAX,NER);if StopOpt = 1 then goto 100;
+      Inc(iIterationNum);
+      OUT2(X, FX, N, M, iIterationNum, otp_step_position);
+      COMPPSIMP(FX^, N, M, iIterationNum, NFEMAX, ErrorCode);
+      if StopOpt = 1 then goto 100;
  26:  for J:=0 to N-1 do X^[J]:=X1[K2-1][J];
       INN:=K2;
 
       //Состояние 9
-      SETOUTS(X,FX,NER);
-      otp_step_position:=9;exit;
-      lbl_9: GETQUAL(X,FX,NER);
+      SETOUTS(X, FX, ErrorCode);
+      otp_step_position := 9;
+      exit;
+    lbl_9:
+      GETQUAL(X, FX, ErrorCode);
 
       SUM[INN-1]:=FX^[M];
       for j:=0 to M do FX1[INN-1][j]:=FX^[j];
-      Inc(NFE);
-      COMPPSIMP(FX^,N,M,NFE,NFEMAX,NER);if StopOpt = 1 then goto 100;
+      Inc(iIterationNum);
+      COMPPSIMP(FX^, N, M, iIterationNum, NFEMAX, ErrorCode);
+      if StopOpt = 1 then goto 100;
       DIFER:=0.0;
       for j:=0 to K1-1 do DIFER:=DIFER+SQR(SUM[j]-SUM[K2-1]);
       DIFER:=1.0/XNX*sqrt(DIFER);
@@ -512,16 +558,15 @@ begin
         for j:=0 to M do FXREZ[j]:=FX1[KOUNT][j];
         RestrictParams(XREZ);
         if FXMax > (1+1.0e-6)*FXREZ[M] then begin
-         OUT2(@XREZ[0],@FXREZ[0],N,M,NFE,stepout);
+         OUT2(@XREZ[0], @FXREZ[0], N, M, iIterationNum, otp_step_position);
          FXMax:=FXREZ[M]
         end;
         iout:=0;
       end;
-      if (DIFER<EPS) then begin
-       NER:=er_opt_Eps;
+      if (DIFER < 1e-6) then begin
+       ErrorCode := er_opt_Eps;
        StopOpt:=1;
       end;
-     Inc(NCIKL);
      goto 28;
   100:
      if (iout = 1) then begin
@@ -535,12 +580,11 @@ begin
       for j:=0 to N-1 do XREZ[j]:=X1[KOUNT][j];
       for j:=0 to M do FXREZ[j]:=FX1[KOUNT][j];
       RestrictParams(XREZ);
-      OUT2(@XREZ[0],@FXREZ[0],N,M,NFE,stepout)
+      OUT2(@XREZ[0], @FXREZ[0], N, M, iIterationNum, otp_step_position)
      end;
 
    l_exit:                  //Аварийный выход из подпрограммы
-
-     otp_step_position:=0;  //Сброс флага состояния метода оптимизации
+     otp_step_position := 0;  //Сброс флага состояния метода оптимизации
 end;
 //-------------------------------------------------------------------------------------------------
 END.

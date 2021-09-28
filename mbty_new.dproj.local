@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+    <Transaction>1899.12.30 00:00:00.000.719,=C:\Program Files\SimInTech\source\MBTY\STD_LIB_NEW\UGradients.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.454,=C:\Program Files\SimInTech\source\MBTY\STD_LIB_NEW\UGradients.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.561,C:\Program Files\SimInTech\source\MBTY\STD_LIB_NEW\UGradientsConnected.pas=C:\Program Files\SimInTech\source\MBTY\STD_LIB_NEW\UGradients2.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.324,=C:\Program Files\SimInTech\source\MBTY\STD_LIB_NEW\UGradients.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.323,C:\Work\Optimizer\MBTY\STD_LIB_NEW\mbty_new.dproj=C:\Work\Optimizer\MBTY\STD_LIB_NEW\mbty_std.dproj</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.946,C:\Program Files\SimInTech\source\MBTY\STD_LIB_NEW\UGradients.pas=C:\Program Files\SimInTech\source\MBTY\STD_LIB_NEW\UGradientsConnected.pas</Transaction>
+    <Transaction>1899.12.30 00:00:00.000.963,C:\Program Files\SimInTech\source\MBTY\STD_LIB_NEW\UGradients.pas=</Transaction>
+  </Transactions>
+</BorlandProject>

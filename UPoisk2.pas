@@ -221,12 +221,14 @@ begin
 end;
 //-------------------------------------------------------------------------------------------------
 PROCEDURE TPOISK2.StepOneParam;
-  label 3, 6, 8, 10, 12,
-        lbl_1,lbl_2,lbl_3,lbl_4,lbl_5;
+
+  label 3, 6, 8, 10, 12;
+
+  // Метки состояния
+  Label lbl_1, lbl_2, lbl_3, lbl_4, lbl_5;
 
   // Метка выхода из процедуры
   label lbl_exit;
-
 
 begin
   // Выбор состояния
@@ -239,12 +241,11 @@ begin
   end;
 
   ErrorCode := 0;
-  // GS: Начальное приближение устанавливается в центр зоны поиска
-  X[0] :=  0.5 * (MaxParam[0] + MinParam[0]);
-  // GS: Начальный шаг устанавливаем равным половине зоны поиска
-  DX[0] :=  0.5 * (MaxParam[0] - MinParam[0]);
+  IterationNum := 0;
+  X^[0] :=  0.5 * (MaxParam^[0] + MinParam^[0]);
+  DX^[0] :=  0.5 * (MaxParam^[0] - MinParam^[0]);
 
-  // Состояние 1 (Подставляем X1 = X0)
+  // Состояние 1
   SETOUTS(X, FX, ErrorCode);
   otp_step_position := 1;
   exit;
@@ -253,11 +254,10 @@ begin
     // Определяем F(X1)
     GETQUAL(X, FX, ErrorCode);
     OUT2(X, FX, N, M, IterationNum, otp_step_position);
-    IterationNum := 1;
-    if StopOpt = -1 then StopOpt:=0;
+    Inc(IterationNum);
     // Шаг 2: X2 = X1 + dX
-    X2[0] := X^[0] + DX[0];
-    // Состояние 2 (Подставляем X2)
+    X2[0] := X^[0] + DX^[0];
+    // Состояние 2
     SETOUTS(@X2[0], @FX2[0], ErrorCode);
     otp_step_position := 2;
     exit;
@@ -265,25 +265,24 @@ begin
   lbl_2:
     // Определяем F(X2)
     GETQUAL(@X2[0], @FX2[0], ErrorCode);
-    OUT2(X, FX, N, M, IterationNum, otp_step_position);
+    OUT2(@X2[0], @FX2[0], N, M, IterationNum, otp_step_position);
     Inc(IterationNum);
-    if StopOpt = 1 then goto lbl_exit;
 
-    if(FX[M] <= FX2[M]) then goto 3;
+    if(FX^[M] <= FX2[M]) then goto 3;
 
     A:=X^[0];
     X^[0] := X2[0];
     X2[0] := A;
     i:=0;
     while i < M + 1 do begin
-      FX^[i]:=FX2[i];
+      FX^[i] := FX2[i];
       inc(i)
     end;
 
   3:
     // Шаг 3: X3 = X1 - dX
     X3[0] := X^[0] + (X^[0] - X2[0]);
-    // Состояние 3 (Подставляем X3)
+    // Состояние 3
     SETOUTS(@X3[0], @FX3[0], ErrorCode);
     otp_step_position := 3;
     exit;
@@ -291,11 +290,10 @@ begin
   lbl_3:
     // Определяем F(X3)
     GETQUAL(@X3[0], @FX3[0], ErrorCode);
-    OUT2(X, FX, N, M, IterationNum, otp_step_position);
+    OUT2(@X3[0], @FX3[0], N, M, IterationNum, otp_step_position);
     Inc(IterationNum);
-    if StopOpt = 1 then goto lbl_exit;
 
-    if(FX[M] <= FX3[M]) then goto 6;
+    if(FX^[M] <= FX3[M]) then goto 6;
 
     X^[0] := X3[0];
     i:=0;
@@ -318,11 +316,18 @@ begin
   lbl_4:
     // Определяем F(X4)
     GETQUAL(@XN[0], @FXN[0], ErrorCode);
-    OUT2(X, FX, N, M, IterationNum, otp_step_position);
+    OUT2(@XN[0], @FXN[0], N, M, IterationNum, otp_step_position);
     Inc(IterationNum);
-    if StopOpt = 1 then goto lbl_exit;
 
-    if(FX[M] <= FXN[M]) then goto 10;
+    // Найден оптимум !!!
+    if (FXN[M] <= 0.001) then begin
+      X^[0] := XN[0];
+      FX^[M] := FXN[M];
+      StopOpt := 1;
+      goto lbl_exit
+    end;
+
+    if(FX^[M] <= FXN[M]) then goto 10;
 
     X3[0] := X2[0];
   8:
@@ -345,11 +350,17 @@ begin
 //##############################################################################
   lbl_5:
     GETQUAL(@XN[0], @FXN[0], ErrorCode);
-    OUT2(X, FX, N, M, IterationNum, otp_step_position);
+    OUT2(@XN[0], @FXN[0], N, M, IterationNum, otp_step_position);
     Inc(IterationNum);
-    if StopOpt = 1 then goto lbl_exit;
+    // Найден оптимум !!!
+    if (FXN[M] <= 0.001) then begin
+      X^[0] := XN[0];
+      FX^[M] := FXN[M];
+      StopOpt := 1;
+      goto lbl_exit
+    end;
 
-    if(FX[M] > FXN[M]) then goto 8;
+    if(FX^[M] > FXN[M]) then goto 8;
 
     X3[0] := XN[0];
   12:
@@ -364,14 +375,15 @@ begin
     goto 6;
 
   lbl_exit:
-    OUT2(X, FX, N, M, IterationNum, otp_step_position);
-    otp_step_position := 0;    //Заново !!!
+    otp_step_position := 0;
 end;
 //-------------------------------------------------------------------------------------------------
 PROCEDURE TPOISK2.StepFewParam;
 
-  label 18,25,35,40,45,60,75,100,
-        lbl_1,lbl_6,lbl_7,lbl_8;
+  label 18,25,35,40,45,60,75,100;
+
+  // Метки состояния
+  label lbl_1, lbl_2, lbl_3, lbl_4;
 
   // Метка выхода из процедуры
   label lbl_exit;
@@ -382,17 +394,19 @@ begin
     // Выбор состояния
     case otp_step_position of
       1: goto lbl_1;
-      6: goto lbl_6;
-      7: goto lbl_7;
-      8: goto lbl_8;
+      2: goto lbl_2;
+      3: goto lbl_3;
+      4: goto lbl_4;
     end;
 
     ErrorCode := 0;
     IC := 0;
+    IterationNum := 0;
+
     i:=0;
     while i < N do begin
-      X[i] :=  0.5 * (MaxParam[i] + MinParam[i]);
-      DX[i] :=  0.5 * (MaxParam[i] - MinParam[i]);
+      X^[i] :=  0.5 * (MaxParam^[i] + MinParam^[i]);
+      DX^[i] :=  0.5 * (MaxParam^[i] - MinParam^[i]);
       inc(i);
     end;
     // Состояние 1 (Подставляем X1 = X0)
@@ -403,7 +417,7 @@ begin
   lbl_1:
     // Определяем F(X1)
     GETQUAL(X, FX, ErrorCode);
-    IterationNum := 1;
+    Inc(IterationNum);
     if StopOpt = -1 then StopOpt:=0;
     OUT2(X, FX, N, M, IterationNum, otp_step_position);
 
@@ -428,15 +442,15 @@ begin
           ErrorCode:=er_opt_MaxFunEval;
         goto lbl_exit
       end;
-      //Состояние 6
+      //Состояние 2
       SETOUTS(@X2[0], @FX2[0], ErrorCode);
-      otp_step_position := 6;
+      otp_step_position := 2;
       exit;
 //##############################################################################
-  lbl_6:
+  lbl_2:
       GETQUAL(@X2[0], @FX2[0], ErrorCode);
       Inc(IterationNum);
-      OUT2(@X2, @FX2, N, M, IterationNum, otp_step_position);
+      OUT2(@X2[0], @FX2[0], N, M, IterationNum, otp_step_position);
       GAMA := 1.0;
       COMPQUAL(X, @X2[0], FX, @FX2[0], N, M, IC);
 
@@ -446,15 +460,15 @@ begin
   25:
       for j := 0 to N-1 do X2[j] := X^[j] - S[j][i];
 
-      //Состояние 7
+      // Состояние 3
       SETOUTS(@X2[0], @FX2[0], ErrorCode);
-      otp_step_position := 7;
+      otp_step_position := 3;
       exit;
 //##############################################################################
-  lbl_7:
+  lbl_3:
       GETQUAL(@X2[0], @FX2[0], ErrorCode);
       Inc(IterationNum);
-      OUT2(@X2, @FX2, N, M, IterationNum, otp_step_position);
+      OUT2(@X2[0], @FX2[0], N, M, IterationNum, otp_step_position);
       GAMA := -1.0;
       COMPQUAL(X, @X2[0], FX, @FX2[0], N, M, IC);
       if (IC = 1) then goto 35;
@@ -462,10 +476,10 @@ begin
       if (IC = 3) then goto lbl_exit;
 
   35:
-      GAMA:=0.5;
+      GAMA := 0.5;
       goto 60;
   40:
-      GAMA:=2.0 * GAMA;
+      GAMA := 2.0 * GAMA;
   45:
       for j:=0 to N-1 do begin
         X^[j] := X2[j];
@@ -477,13 +491,13 @@ begin
 
       //Состояние 8
       SETOUTS(@X2[0], @FX2[0], ErrorCode);
-      otp_step_position := 8;
+      otp_step_position := 4;
       exit;
 //##############################################################################
-  lbl_8:
+  lbl_4:
       GETQUAL(@X2[0], @FX2[0], ErrorCode);
       Inc(IterationNum);
-      OUT2(@X2, @FX2, N, M, IterationNum, otp_step_position);
+      OUT2(@X2[0], @FX2[0], N, M, IterationNum, otp_step_position);
       COMPQUAL(X, @X2[0], FX, @FX2[0], N, M, IC);
       if (IC = 1) then goto 60;         // FX < FX2
       if (IC = 2) then goto 40;         // FX > FX2
@@ -525,7 +539,6 @@ begin
      goto 18;
 
 lbl_exit:
-    OUT2(X, FX, N, M, IterationNum, otp_step_position);
     otp_step_position := 0;    //Заново !!!
 end;
 //-------------------------------------------------------------------------------------------------

@@ -3,32 +3,32 @@
   {$MODE Delphi}
 {$ENDIF}
 //-------------------------------------------------------------------------------------------------
-UNIT UGradients;
+UNIT UGradients2;
 
 interface
 
 USES Classes, DataTypes, OptType;
 
 type
-  // Процедура оптимизации реализующая метод наискорейшего градиентного спуска
-  // переделанная под конечно-автоматный вариант работы
-  TGRADIENTS = class(TOptMethod)
+   // Процедура оптимизации реализующая метод сопряженных градиентов
+   // переделанная под конечно-автоматный вариант работы
+   TGRADIENTS2 = class(TOptMethod)
 
 public
 
   // Выполнить шаг оптимизации
-  procedure ExecuteStep(X                     : PExtArr;    // Массив выходов (параметров)
-                        FX                    : PExtArr;    // Массив входов (критериев)
-                        N                     : integer;    // Кол-во выходов (параметров)
-                        M                     : integer;    // Кол-во входов (критериев)
-                        DX                    : PExtArr;    // Текущее приращение параметра оптимизации
-                        DXfinal               : PExtArr;    // Точность подбора выходов (параметров)
-                        NFEMAX                : integer;    // Максимальное кол-во итераций
-                        MinParam              : PExtArr;    // Минимальные значения выходов (параметров)
-                        MaxParam              : PExtArr;    // Максимальные значения выходов (параметров)
-                        var ErrorCode         : NativeInt;  // Код ошибки
-                        var StopOpt           : integer;    // Флаг конца оптимизации
-                        var otp_step_position : integer     // Состояние алгоритма оптимизации
+   procedure ExecuteStep( X                     : PExtArr;    // Массив выходов (параметров)
+                          FX                    : PExtArr;    // Массив входов (критериев)
+                          N                     : integer;    // Кол-во выходов (параметров)
+                          M                     : integer;    // Кол-во входов (критериев)
+                          DX                    : PExtArr;    // Текущее приращение параметра оптимизации
+                          DXfinal               : PExtArr;    // Точность подбора выходов (параметров)
+                          NFEMAX                : integer;    // Максимальное кол-во итераций
+                          MinParam              : PExtArr;    // Минимальные значения выходов (параметров)
+                          MaxParam              : PExtArr;    // Максимальные значения выходов (параметров)
+                          var ErrorCode         : NativeInt;  // Код ошибки
+                          var StopOpt           : integer;    // Флаг конца оптимизации
+                          var otp_step_position : integer     // Состояние алгоритма оптимизации
                         ); override;
 
   // Инициализация памяти
@@ -42,6 +42,7 @@ public
 
   // Запись точки рестарта блока
   procedure RestartSave(Stream: TStream);override;
+
 
 protected
 
@@ -62,6 +63,12 @@ protected
 
   // Массив градиентов (при нескольких оптимизируемых параметрах)
   aGradients    : array of realtype;
+
+  // Массив градиентов с предыдуюего шага (при нескольких оптимизируемых параметрах)
+  aGradientsOld : array of realtype;
+
+  // Массив шагов (при нескольких оптимизируемых параметрах)
+  aSteps        : array of realtype;
 
   // Точка 2
   X2            : array of realtype;
@@ -110,7 +117,7 @@ end;
 //##############################################################################
 implementation
 //##############################################################################
-function TGRADIENTS.RestartLoad(Stream: TStream;Count: integer;const TimeShift:double):boolean;
+function TGRADIENTS2.RestartLoad(Stream: TStream;Count: integer;const TimeShift:double):boolean;
  var j: integer;
 begin
   Result:=True;
@@ -124,7 +131,7 @@ begin
   Stream.Read(FX3[0], Length(FX3)*SizeOfDouble);
 end;
 //-------------------------------------------------------------------------------------------------
-procedure TGRADIENTS.RestartSave(Stream: TStream);
+procedure TGRADIENTS2.RestartSave(Stream: TStream);
  var j: integer;
 begin
   Stream.Write(iIterationNum, SizeOfInt);
@@ -137,28 +144,32 @@ begin
   Stream.Write(FX3[0], Length(FX3)*SizeOfDouble);
 end;
 //-------------------------------------------------------------------------------------------------
-procedure TGRADIENTS.InitMem;
+procedure TGRADIENTS2.InitMem;
  var j: integer;
 begin
   LeaveMem;
   SetLength(aGradients, N);
+  SetLength(aGradientsOld, N);
+  SetLength(aSteps, N);
   SetLength(X2, N);
   SetLength(X3, N);
   SetLength(FX2, M + 1);
   SetLength(FX3, M + 1);
 end;
 //-------------------------------------------------------------------------------------------------
-procedure TGRADIENTS.LeaveMem;
+procedure TGRADIENTS2.LeaveMem;
   var j: integer;
 begin
   SetLength(aGradients, 0);
+  SetLength(aGradientsOld, 0);
+  SetLength(aSteps, 0);
   SetLength(X2, 0);
   SetLength(X3, 0);
   SetLength(FX2, 0);
   SetLength(FX3, 0);
 end;
 //-------------------------------------------------------------------------------------------------
-PROCEDURE TGRADIENTS.ExecuteStep;
+PROCEDURE TGRADIENTS2.ExecuteStep;
 begin
   if(N > 1) then
     StepFewParam(X, FX, N, M, DX, DXfinal, NFEMAX, MinParam, MaxParam, ErrorCode, StopOpt, otp_step_position)
@@ -166,7 +177,7 @@ begin
     StepOneParam(X, FX, N, M, DX, DXfinal, NFEMAX, MinParam, MaxParam, ErrorCode, StopOpt, otp_step_position);
 end;
 //-------------------------------------------------------------------------------------------------
-PROCEDURE TGRADIENTS.StepOneParam;
+PROCEDURE TGRADIENTS2.StepOneParam;
 
   // Метки состояния
   Label lbl_1, lbl_2, lbl_3, lbl_4;
@@ -282,25 +293,31 @@ begin
     goto lbl_3R;
 
   lbl_exit:
-    otp_step_position := 0;
+    otp_step_position := 0;;
 end;
 //-------------------------------------------------------------------------------------------------
-PROCEDURE TGRADIENTS.StepFewParam;
+PROCEDURE TGRADIENTS2.StepFewParam;
   // Метки состояния
   Label lbl_1, lbl_2, lbl_3, lbl_4;
 
-  // Промежуточные Метки состояния
+  // Промежуточные метки состояния
   Label lbl_1R, lbl_3R;
 
   // Метка выхода из процедуры
   label lbl_exit;
 
   var
+  // Счетчики
+  j,k           : integer;
+
   // Обобщенная точность подбора параметров
   EpsSum        : realtype;
 
-  // Счетчики
-  j,k           : integer;
+  // Текущая длина градиента
+  LenghtCur     : realtype;
+
+  // Предыдущая длина градиента
+  LenghtOld     : realtype;
 
 begin
   // Выбор состояния
@@ -314,6 +331,7 @@ begin
   ErrorCode := 0;
   iIterationNum := 0;
   rAlfa := 1.0;
+  GAMA := 2.0;
 
   j := 0;
   while j < N do begin
@@ -374,10 +392,27 @@ begin
       inc(iParamNum);
   END;
 
+  // Определение ..
+  for j := 0 to N - 1 do begin
+    LenghtCur := LenghtCur + aGradients[j]*aGradients[j];
+    LenghtOld := LenghtOld + aGradientsOld[j]*aGradientsOld[j];
+  end;
+  // Шаг в направление сопряженного градиента
+  for j := 0 to N - 1 do begin
+    if(LenghtOld < 0.001) then
+      aSteps[j] := aGradients[j]
+    else
+      aSteps[j] := aGradients[j] + LenghtCur / LenghtOld * aSteps[j];
+  end;
+
+  for j := 0 to N - 1 do begin
+    aGradientsOld[j] := aGradients[j];
+  end;
+
   lbl_3R:
       // Расчет точки X3
       for j := 0 to N - 1 do begin
-        X3[j] := X^[j] - GAMA * aGradients[j];
+        X3[j] := X^[j] - GAMA * aSteps[j];
       end;
       // Состояние 4
       SETOUTS(@X3[0], @FX3[0], ErrorCode);
@@ -399,7 +434,7 @@ begin
           X^[j] := X3[j];
           FX^[j] := FX3[j];
         end;
-        FX[M] := FX3[M];
+        FX^[M] := FX3[M];
         StopOpt := 1;
         goto lbl_exit
       end;
@@ -429,7 +464,6 @@ begin
       GAMA := 0.5 * GAMA;
       goto lbl_3R;
 //##############################################################################
-
   lbl_exit:
     otp_step_position := 0;
 end;

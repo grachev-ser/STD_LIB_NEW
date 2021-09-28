@@ -979,6 +979,7 @@
         <DCCReference Include="trigger.pas"/>
         <DCCReference Include="Vectors.pas"/>
         <DCCReference Include="uOptimizers.pas"/>
+        <DCCReference Include="UGradients2.pas"/>
         <DCCReference Include="UGradients.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
